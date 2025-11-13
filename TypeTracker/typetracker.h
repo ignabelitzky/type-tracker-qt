@@ -1,14 +1,11 @@
-#ifndef TYPETRACKER_H
-#define TYPETRACKER_H
+#pragma once
 
 #include <QTime>
 #include <QMainWindow>
 #include <QString>
 #include <QTimer>
-#include <vector>
-#include <string>
-
-using namespace std;
+#include <QVector>
+#include <QString>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -23,32 +20,33 @@ public:
     virtual ~BaseTypeTracker();
 
 protected:
-    QTime counterTime;
-    int wordIndex;
-    int error;
-    int amount;
-    float chars;
-    bool pastError;
-    vector<string> word;
-    vector<string> userWord;
+    QTime m_counterTime;
+    int m_wordIndex;
+    int m_error;
+    int m_amount;
+    float m_chars;
+    bool m_pastError;
+    QVector<QString> m_words;
+    QVector<QString> m_userWords;
 };
 
-class TypeTracker : public QMainWindow, public BaseTypeTracker // Classe derivada e janela principal do Qt
+class TypeTracker : public QMainWindow, public BaseTypeTracker
 
 {
     Q_OBJECT
 
 public:
-    TypeTracker(QWidget *parent = nullptr);
+    explicit TypeTracker(QWidget *parent = nullptr);
     ~TypeTracker();
 
 private slots:
-    void on_pushButton_clicked();
+    void onStartButtonClicked();
     void updateCounter();
+    void onInputTextChanged(const QString& text);
 
 private:
-    Ui::TypeTracker *ui;
-    QTimer *timer; // Temporizador para atualizar o contador
-};
+    void resetSession();
 
-#endif // TYPETRACKER_H
+    Ui::TypeTracker *ui;
+    QTimer *m_timer;
+};

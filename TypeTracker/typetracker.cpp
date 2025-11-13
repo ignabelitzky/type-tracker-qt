@@ -1,26 +1,25 @@
 #include "typetracker.h"
 #include "ui_typetracker.h"
 #include <QTimer>
-#include <QString>
-#include <string>
-#include <vector>
 #include <QMessageBox>
-#include <QIcon>
 
-BaseTypeTracker::BaseTypeTracker()
-    : wordIndex(0), error(0), amount(0), chars(0), pastError(false)
+BaseTypeTracker::BaseTypeTracker() :
+    m_wordIndex{0}, m_error{0}, m_amount{0},
+    m_chars{0}, m_pastError{false}
 {
-    word = {"love", "friendship", "peace", "enjoy", "hope", "courage", "honor", "wisdom", "happiness", "freedom", "respect", "justice", "solidarity", "gratitude", "resilience", "compassion", "kindness", "optimism", "creativity", "determination", "patience", "humility", "integrity", "trust", "forgiveness", "self-love", "responsibility", "discipline", "tolerance", "enthusiasm", "diligence", "altruism", "loyalty", "sensitivity", "adaptability", "assertiveness", "competence", "consistency", "collaboration", "empathy", "balance", "fidelity", "strength", "honesty", "inclusion", "innovation", "inspiration", "modesty", "objectivity", "perseverance", "insight", "prudence", "rationality", "resolution", "simplicity", "sincerity", "transparency", "unity", "bravery", "vigilance", "vivacity", "zeal", "shelter", "hospitality", "admiration", "relief", "benevolence", "calmness", "clarity", "companionship", "commitment", "understanding", "comfort", "consideration", "contentment", "care", "dedication", "delicacy", "dignity", "discretion", "thoughtfulness", "generosity", "joyfulness", "peacefulness", "serenity", "compassionate", "benevolent", "sincere", "truthful", "mindfulness", "carefulness", "attentiveness", "warmth", "humbleness", "gentleness", "charity", "kindhearted", "helpfulness", "understanding", "tenderness", "loyal", "friendly", "cheerful", "energetic", "enthusiastic"};
+    m_words = {"love", "friendship", "peace", "enjoy", "hope", "courage", "honor", "wisdom", "happiness", "freedom", "respect", "justice", "solidarity", "gratitude", "resilience", "compassion", "kindness", "optimism", "creativity", "determination", "patience", "humility", "integrity", "trust", "forgiveness", "self-love", "responsibility", "discipline", "tolerance", "enthusiasm", "diligence", "altruism", "loyalty", "sensitivity", "adaptability", "assertiveness", "competence", "consistency", "collaboration", "empathy", "balance", "fidelity", "strength", "honesty", "inclusion", "innovation", "inspiration", "modesty", "objectivity", "perseverance", "insight", "prudence", "rationality", "resolution", "simplicity", "sincerity", "transparency", "unity", "bravery", "vigilance", "vivacity", "zeal", "shelter", "hospitality", "admiration", "relief", "benevolence", "calmness", "clarity", "companionship", "commitment", "understanding", "comfort", "consideration", "contentment", "care", "dedication", "delicacy", "dignity", "discretion", "thoughtfulness", "generosity", "joyfulness", "peacefulness", "serenity", "compassionate", "benevolent", "sincere", "truthful", "mindfulness", "carefulness", "attentiveness", "warmth", "humbleness", "gentleness", "charity", "kindhearted", "helpfulness", "understanding", "tenderness", "loyal", "friendly", "cheerful", "energetic", "enthusiastic"};
 }
 
 BaseTypeTracker::~BaseTypeTracker() {}
 
 TypeTracker::TypeTracker(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::TypeTracker), timer(new QTimer(this))
+    : QMainWindow(parent), ui(new Ui::TypeTracker), m_timer(new QTimer(this))
 {
     ui->setupUi(this);
-    connect(timer, &QTimer::timeout, this, &TypeTracker::updateCounter); // Conecta o timer c/ slot updateCounter
-    connect(ui->pushButton, &QPushButton::clicked, this, &TypeTracker::on_pushButton_clicked);// Conecta o botão c/ on_pushButton_clicked
+    ui->counterTimeEdit->setDisplayFormat("ss");
+    connect(m_timer, &QTimer::timeout, this, &TypeTracker::updateCounter);
+    connect(ui->startButton, &QPushButton::clicked, this, &TypeTracker::onStartButtonClicked);
+    connect(ui->inputLineEdit, &QLineEdit::textChanged, this, &TypeTracker::onInputTextChanged);
 }
 
 TypeTracker::~TypeTracker()
@@ -28,64 +27,108 @@ TypeTracker::~TypeTracker()
     delete ui;
 }
 
-void TypeTracker::on_pushButton_clicked()
+void TypeTracker::onStartButtonClicked()
 {
-    ui->lineEdit->clear();
-    ui->lineEdit->setFocus();
+    ui->inputLineEdit->setEnabled(true);
+    m_timer->stop();
+    m_counterTime.setHMS(0, 0, 0);
+    ui->counterTimeEdit->setTime(m_counterTime);
 
-    if (!timer->isActive()) {
-        timer->start(16.67); //Tempo aproximado em ms p/ que 1 min se passe em 1s
-    } else {
-        counterTime.setHMS(0, 0, 0);
-        ui->timeEdit->setTime(counterTime);
+    ui->inputLineEdit->clear();
+    ui->inputLineEdit->setFocus();
+
+    m_userWords.assign(m_words.size(), QString());
+    m_wordIndex = 0;
+    m_error = 0;
+    m_amount = 0;
+    m_chars = 0;
+
+    // Show first word immediately
+    if (!m_words.isEmpty()) {
+        ui->wordTextEdit->setText(m_words[m_wordIndex]);
     }
-    userWord.clear();
-    userWord.resize(word.size());
-    wordIndex = 0;
-    error = 0;
-    amount = 0;
-    chars = 0;
+
+    m_timer->start(1000);
 }
 
 void TypeTracker::updateCounter()
 {
-    counterTime = counterTime.addSecs(1);
-    ui->timeEdit->setTime(counterTime);
+    m_counterTime = m_counterTime.addSecs(1);
+    ui->counterTimeEdit->setTime(m_counterTime);
 
-    if (counterTime.hour() == 0 && wordIndex < word.size()) {
-        QString displayedWord = QString::fromStdString(word[wordIndex]);
-        ui->textEdit->setText(displayedWord);
-        QString userInput = ui->lineEdit->text();
+    // When 1 minute passes or all words are done
+    if (m_counterTime.minute() >= 1 || m_wordIndex >= m_words.size()) {
+        m_timer->stop();
 
-        int min_length = qMin(userInput.length(), displayedWord.length());// Calcula o comprimento mínimo das palavras
-        int wordErrors = 0;
+        float wpm = (m_chars / 5.0f) / 1.0f; // per minute
+        float accuracy = 0.0f;
+        if (m_chars > 0)
+            accuracy = ((m_chars - m_amount) / static_cast<float>(m_chars)) * 100.0f;
 
-        for (int i = 0; i < min_length; ++i) { // Compara char a char
-            if (userInput[i] != displayedWord[i]) {
-                wordErrors++;
-            }
-        }
+        QMessageBox::information(this,
+                                 "ScoreBoard",
+                                 QString("You typed %1 chars.\nWPM: %2\nAccuracy: %3%")
+                                     .arg(m_chars)
+                                     .arg(wpm)
+                                     .arg(accuracy));
 
-        if (userInput.length() == displayedWord.length()) {
-            userWord[wordIndex] = userInput.toStdString();
-            amount += wordErrors;
-            chars += userInput.length();
-            wordIndex++;
-            ui->lineEdit->clear();
-        }
+        // Reset everything after user closes the message box
+        resetSession();
+    }
+}
 
-        ui->lineEdit_2->setText(QString::number(amount));
+
+void TypeTracker::onInputTextChanged(const QString &text)
+{
+    if (m_wordIndex >= m_words.size())
+        return;
+
+    QString currentWord = m_words[m_wordIndex];
+
+    int minLength = qMin(text.length(), currentWord.length());
+    int wordErrors = 0;
+
+    for (int i = 0; i < minLength; ++i) {
+        if (text[i] != currentWord[i])
+            wordErrors++;
     }
 
-    if (counterTime.hour() == 1 || wordIndex >= word.size()) {
-        timer->stop();
-        counterTime.setHMS(0, 0, 0);
-        ui->timeEdit->setTime(counterTime);
-        ui->textEdit->setText(QString::number(amount));
-        float wpm = (chars / 60) * 5;
-        float accuracy = ((chars - amount) / chars) * 100;
+    // If user finishes the word (length matches)
+    if (text.length() == currentWord.length()) {
+        m_userWords[m_wordIndex] = text;
+        m_amount += wordErrors;
+        m_chars += text.length();
+        m_wordIndex++;
 
-        QMessageBox::information(this, "ScoreBoard", QString("You have written about %2 WPM.\n You typed %1 chars.\n Your accuracy was %3 %.").arg(chars).arg(wpm).arg(accuracy));
+        ui->missCounterLineEdit->setText(QString::number(m_amount));
+
+        // Move to next word
+        if (m_wordIndex < m_words.size()) {
+            ui->wordTextEdit->setText(m_words[m_wordIndex]);
+        } else {
+            ui->wordTextEdit->setText("Done!");
+        }
+
+        ui->inputLineEdit->clear();
     }
+}
+
+void TypeTracker::resetSession()
+{
+    m_timer->stop();
+    m_counterTime.setHMS(0, 0, 0);
+    ui->counterTimeEdit->setTime(m_counterTime);
+
+    ui->inputLineEdit->clear();
+    ui->wordTextEdit->clear();
+    ui->missCounterLineEdit->clear();
+
+    m_wordIndex = 0;
+    m_amount = 0;
+    m_chars = 0;
+    m_userWords.clear();
+
+    // Optionally disable input until "Start" is pressed again
+    ui->inputLineEdit->setEnabled(false);
 }
 

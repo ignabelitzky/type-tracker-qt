@@ -1,10 +1,6 @@
 #include "typetracker.h"
 #include <QApplication>
-#include <chrono>
 #include <QString>
-#include <QVector>
-#include <iomanip>
-#include <cstdlib>
 
 int main(int argc, char *argv[])
 {
